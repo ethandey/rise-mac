@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# desk-health — thin launcher for the Python daemon
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY_SCRIPT="${SCRIPT_DIR}/desk_health.py"
+
+# Prefer PATH python3, then Miniforge, then system
+if command -v python3 >/dev/null 2>&1; then
+  PY="$(command -v python3)"
+elif [[ -x /Users/ethan/Miniforge3/bin/python3 ]]; then
+  PY="/Users/ethan/Miniforge3/bin/python3"
+elif [[ -x /usr/bin/python3 ]]; then
+  PY="/usr/bin/python3"
+else
+  echo "desk-health: python3 not found" >&2
+  exit 127
+fi
+
+exec "$PY" "$PY_SCRIPT" "$@"

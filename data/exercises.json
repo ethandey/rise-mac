@@ -1,0 +1,60 @@
+{
+  "A": {
+    "title": "Eyes + posture reset",
+    "subtitle": "30–45 seconds  ·  every 20 minutes",
+    "sound": "Purr",
+    "steps": [
+      "Look about 20 feet / 6 m away for 20 seconds — soft gaze",
+      "Blink fully 10 times — close completely, open soft",
+      "Chin tuck (gentle double-chin) and drop your shoulders",
+      "Five slow shoulder-blade squeezes — pinch, then release"
+    ]
+  },
+  "B": {
+    "title": "Stand + stretch",
+    "subtitle": "90–120 seconds  ·  every 40 minutes  ·  stand up",
+    "sound": "Blow",
+    "steps": [
+      "Neck: side bend and gentle rotation, both sides (~15s each)",
+      "Chest opener: hands clasped behind back or doorway (20s)",
+      "Thoracic: reach up and lean slightly — mid-back (15s)",
+      "Standing hip flexor stretch, both sides (15s each)",
+      "Wrists: prayer + reverse prayer, or finger fans (15s)"
+    ]
+  },
+  "C": {
+    "title": "Bands or walk",
+    "subtitle": "3–5 minutes  ·  every 90 minutes",
+    "sound": "Hero",
+    "steps": [
+      "Band pull-aparts ×12 — arms long, squeeze blades",
+      "Band face pulls ×10 — elbows high, external rotation",
+      "Band rows ×10 — quiet ribs, squeeze mid-back",
+      "Band good-mornings or glute bridges ×10",
+      "Optional: standing band hip abductions ×8 / side"
+    ],
+    "options": {
+      "bands": {
+        "title": "Resistance band mini-circuit",
+        "subtitle": "3–5 minutes  ·  every 90 minutes",
+        "steps": [
+          "Band pull-aparts ×12 — arms long, squeeze blades",
+          "Band face pulls ×10 — elbows high, external rotation",
+          "Band rows ×10 — quiet ribs, squeeze mid-back",
+          "Band good-mornings or glute bridges ×10",
+          "Optional: standing band hip abductions ×8 / side"
+        ]
+      },
+      "walk": {
+        "title": "Walk break",
+        "subtitle": "3–5 minutes  ·  every 90 minutes",
+        "steps": [
+          "Leave the desk completely",
+          "Walk 3–5 minutes (hall, stairs, outdoors if possible)",
+          "Drink water",
+          "Optional: outdoor light / look at a distant horizon"
+        ]
+      }
+    }
+  }
+}

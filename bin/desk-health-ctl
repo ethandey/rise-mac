@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# User-facing control CLI for desk-health.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LABEL="com.ethan.desk-health"
+PLIST_DST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
+UID_NUM="$(id -u)"
+DOMAIN="gui/${UID_NUM}"
+SERVICE="${DOMAIN}/${LABEL}"
+
+# Prefer Miniforge python, fall back to env python3
+if [[ -x /Users/ethan/Miniforge3/bin/python3 ]]; then
+  PYTHON="/Users/ethan/Miniforge3/bin/python3"
+else
+  PYTHON="/usr/bin/env python3"
+fi
+
+DAEMON="$ROOT/bin/desk_health.py"
+
+usage() {
+  cat <<EOF
+Usage: desk-health-ctl <command> [args]
+
+Commands:
+  menubar            Start menu bar manager (native)
+  test [all|A|B|C]   Preview UI (default: A→B→C sequence)
+  once [A|B|C]       Real full-screen break (updates schedule)
+  status             Show daemon status
+  start              Start the LaunchAgent (only after you install + agree)
+  stop               Stop the LaunchAgent
+  restart            Restart the LaunchAgent
+  pause              Pause the daemon
+  resume             Resume the daemon
+  snooze [mins]      Snooze alarms
+EOF
+}
+
+py() {
+  if [[ ! -f "$DAEMON" ]]; then
+    echo "error: daemon not found at $DAEMON" >&2
+    exit 1
+  fi
+  "$PYTHON" "$DAEMON" "$@"
+}
+
+cmd_start() {
+  if [[ ! -f "$PLIST_DST" ]]; then
+    echo "error: not installed. Run: bash $ROOT/bin/install.sh" >&2
+    exit 1
+  fi
+  if launchctl print "$SERVICE" &>/dev/null; then
+    launchctl kickstart -k "$SERVICE"
+  else
+    launchctl bootstrap "$DOMAIN" "$PLIST_DST"
+    launchctl kickstart -k "$SERVICE" 2>/dev/null || true
+  fi
+  echo "started $LABEL"
+}
+
+cmd_stop() {
+  if launchctl print "$SERVICE" &>/dev/null; then
+    launchctl bootout "$SERVICE" 2>/dev/null || true
+    echo "stopped $LABEL"
+  else
+    echo "already stopped (or not installed)"
+  fi
+}
+
+cmd_restart() {
+  if [[ ! -f "$PLIST_DST" ]]; then
+    echo "error: not installed. Run: bash $ROOT/bin/install.sh" >&2
+    exit 1
+  fi
+  if launchctl print "$SERVICE" &>/dev/null; then
+    launchctl kickstart -k "$SERVICE"
+  else
+    launchctl bootstrap "$DOMAIN" "$PLIST_DST"
+    launchctl kickstart -k "$SERVICE" 2>/dev/null || true
+  fi
+  echo "restarted $LABEL"
+}
+
+cmd_status() {
+  echo "=== launchd ==="
+  if launchctl print "$SERVICE" 2>/dev/null; then
+    :
+  else
+    echo "not loaded: $SERVICE"
+    if [[ -f "$PLIST_DST" ]]; then
+      echo "plist present at $PLIST_DST (run: desk-health-ctl start)"
+    else
+      echo "not installed (run: bash $ROOT/bin/install.sh)"
+    fi
+  fi
+  echo ""
+  echo "=== daemon ==="
+  if [[ -f "$DAEMON" ]]; then
+    py status || echo "(daemon status command failed)"
+  else
+    echo "daemon missing: $DAEMON"
+  fi
+}
+
+main() {
+  if [[ $# -lt 1 ]]; then
+    usage
+    exit 1
+  fi
+  local cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    restart) cmd_restart ;;
+    status)  cmd_status ;;
+    menubar) py menubar ;;
+    test)    py test "${1:-all}" ;;
+    pause)   py pause "$@" ;;
+    resume)  py resume "$@" ;;
+    snooze)  py snooze "$@" ;;
+    once)    py once "${1:-A}" ;;
+    -h|--help|help) usage ;;
+    *)
+      echo "unknown command: $cmd" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

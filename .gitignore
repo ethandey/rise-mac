@@ -1,0 +1,45 @@
+# Built native binary (install.sh / native/build.sh produce it)
+bin/DeskHealthOverlay
+
+# Swift / SPM
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+DerivedData/
+
+# Runtime state & logs (keep config.default.json and exercises.json)
+data/state.json
+data/*.log
+data/desk_health.pid
+data/config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Temp / scratch
+/tmp/
+tmp/
+*.tmp
+*.swp
+*~
+
+# Editor / IDE
+.idea/
+.vscode/
+*.code-workspace

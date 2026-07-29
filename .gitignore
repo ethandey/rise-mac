@@ -13,6 +13,7 @@ DerivedData/
 data/state.json
 data/*.log
 data/desk_health.pid
+data/rise-menubar.lock
 data/config.json
 
 # Python

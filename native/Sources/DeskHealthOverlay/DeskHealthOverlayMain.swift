@@ -28,11 +28,20 @@ enum DeskHealthOverlayMain {
             exit(2)
         }
 
+        // Menu bar: only one resident instance. One-shot --layer may run beside it.
+        if case .menuBar = mode {
+            if !SingleInstance.acquireMenubar() {
+                fputs("rise: menu bar already running — exiting duplicate\n", stderr)
+                exit(0)
+            }
+        }
+
         let app = NSApplication.shared
         let retain = DelegateBox()
         retain.delegate = AppDelegate(mode: mode)
         app.delegate = retain.delegate
         app.run()
+        SingleInstance.releaseMenubar()
         exit(0)
     }
 

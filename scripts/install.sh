@@ -65,14 +65,25 @@ sed \
   "$PLIST_SRC" > "$PLIST_DST"
 echo "    installed $PLIST_DST"
 
-# Unload if already loaded, then bootstrap
+# Unload if already loaded
 if launchctl print "${DOMAIN}/${LABEL}" &>/dev/null; then
   echo "    unloading existing agent..."
   launchctl bootout "${DOMAIN}/${LABEL}" 2>/dev/null || true
+  sleep 0.3
 fi
 
+# Kill any stray menu bar copies (manual starts, old installs).
+# Only match the real binary name — never a shell that merely mentions it.
+echo "    clearing duplicate menu bar processes..."
+# shellcheck disable=SC2009
+ps -axo pid=,args= | grep '[D]eskHealthOverlay --menubar' | awk '{print $1}' | while read -r pid; do
+  kill "$pid" 2>/dev/null || true
+done
+sleep 0.4
+rm -f "$ROOT/data/rise-menubar.lock"
+
 echo "    loading agent..."
-launchctl bootstrap "${DOMAIN}" "$PLIST_DST"
+launchctl bootstrap "${DOMAIN}" "$PLIST_DST" 2>/dev/null || launchctl load "$PLIST_DST" 2>/dev/null || true
 launchctl enable "${DOMAIN}/${LABEL}" 2>/dev/null || true
 launchctl kickstart -k "${DOMAIN}/${LABEL}" 2>/dev/null || true
 

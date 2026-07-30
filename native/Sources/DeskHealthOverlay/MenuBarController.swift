@@ -35,20 +35,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         rebuildMenu()
         updateTooltip()
 
+        location.onStatusChange = { [weak self] in
+            self?.updateTooltip()
+            self?.rebuildMenu()
+        }
+
         let t = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateTooltip()
-                // Keep menu fresh if open
-                if self?.statusItem?.menu?.numberOfItems ?? 0 > 0 {
-                    // only rebuild when menu is open via menuWillOpen
-                }
             }
         }
         RunLoop.main.add(t, forMode: .common)
         refreshTimer = t
-
-        // Location status changes should refresh menu next open + tooltip
-        // (ObservableObject updates are fine; tooltip polls every second)
     }
 
     func refresh() {
@@ -191,8 +189,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func setHome() {
+        // Immediate feedback in menu while Core Location runs
+        rebuildMenu()
+        updateTooltip()
         location.setHomeHere()
-        // macOS will prompt for location permission on first use
         rebuildMenu()
         updateTooltip()
     }

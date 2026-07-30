@@ -1,5 +1,6 @@
-# Built native binary (install.sh / native/build.sh produce it)
+# Built native binary / app (install.sh / package-app.sh produce them)
 bin/DeskHealthOverlay
+bin/Rise.app/
 
 # Swift / SPM
 .build/

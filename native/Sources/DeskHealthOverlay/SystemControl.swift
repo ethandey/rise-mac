@@ -2,15 +2,29 @@ import Foundation
 
 /// Thin bridge to optional Python CLI helpers (pause/resume/snooze).
 enum SystemControl {
-    /// Install root: …/bin/DeskHealthOverlay → parent of bin
+    /// Install root: repo folder containing `bin/` and `data/`.
     static var root: String {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-        // …/bin/DeskHealthOverlay or …/.build/release/DeskHealthOverlay
-        let dir = exe.deletingLastPathComponent()
+        var dir = exe.deletingLastPathComponent()
+
+        // Rise.app/Contents/MacOS/Rise → …/bin/Rise.app/… → repo root
+        if dir.lastPathComponent == "MacOS" {
+            // MacOS → Contents → Rise.app → bin → root
+            dir = dir
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+            if dir.lastPathComponent == "bin" {
+                return dir.deletingLastPathComponent().path
+            }
+            return dir.path
+        }
+
+        // …/bin/DeskHealthOverlay
         if dir.lastPathComponent == "bin" {
             return dir.deletingLastPathComponent().path
         }
-        // Dev build: native/.build/release → repo root two levels up from .build
+        // Dev build: native/.build/release
         if dir.lastPathComponent == "release" {
             return dir
                 .deletingLastPathComponent() // .build

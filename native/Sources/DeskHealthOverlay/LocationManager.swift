@@ -1,3 +1,4 @@
+import AppKit
 import CoreLocation
 import Foundation
 
@@ -20,7 +21,7 @@ final class LocationManager: NSObject, ObservableObject {
             case .locating: return "Locating…"
             case .atHome: return "At home"
             case .away: return "Away from home"
-            case .denied: return "Location denied"
+            case .denied: return "Location denied — enable in System Settings"
             case .error(let m): return m
             }
         }
@@ -29,13 +30,14 @@ final class LocationManager: NSObject, ObservableObject {
     @Published private(set) var status: PlaceStatus = .homeNotSet
     @Published private(set) var homeSet: Bool = false
     @Published private(set) var lastAccuracy: CLLocationAccuracy = -1
+    @Published private(set) var lastMessage: String?
 
     /// When home is set, schedule only runs while at home.
     var allowsRoutine: Bool {
         switch status {
-        case .homeNotSet: return true // no geofence yet
+        case .homeNotSet: return true
         case .atHome: return true
-        case .locating: return true // don't pause while we figure it out
+        case .locating: return true
         case .away, .denied, .error: return false
         }
     }
@@ -46,59 +48,154 @@ final class LocationManager: NSObject, ObservableObject {
     private let defaultsHomeRadius = "rise.home.radius"
     private let defaultsHomeSet = "rise.home.set"
 
-    /// Meters — ~building / block scale, not street-level stalking.
     private(set) var homeRadius: CLLocationDistance = 150
-
     private var homeCoordinate: CLLocationCoordinate2D?
+    private var pendingSetHome = false
+    private var setHomeTimeout: Timer?
+
+    /// Called when status changes so menu bar can refresh / alert.
+    var onStatusChange: (() -> Void)?
 
     private override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        manager.distanceFilter = 50
+        manager.distanceFilter = 25
         loadHome()
-        refreshAuthorizationAndStart()
+        // Don't request permission at launch — only when user sets home
+        if homeSet {
+            refreshAuthorizationAndStart()
+        }
     }
 
     func refreshAuthorizationAndStart() {
         switch manager.authorizationStatus {
         case .notDetermined:
+            // Must be called from user gesture path; menu action is fine
             manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
             startUpdates()
             recomputeStatus()
         case .denied, .restricted:
-            status = homeSet ? .denied : .homeNotSet
+            status = .denied
+            lastMessage = "Location access is off for Rise."
+            notifyChange()
         @unknown default:
             break
         }
     }
 
-    /// Capture current location as home (user must be at home).
+    /// Capture current location as home. Shows alerts for success / fail / permission.
     func setHomeHere() {
-        refreshAuthorizationAndStart()
-        if let loc = manager.location {
-            saveHome(coordinate: loc.coordinate)
-            recomputeStatus(with: loc)
-            return
-        }
-        // Wait for next fix
         pendingSetHome = true
         status = .locating
-        startUpdates()
+        lastMessage = "Getting your location…"
+        notifyChange()
+
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+            // Also kick a timeout so we don't hang forever if no dialog appears
+            armSetHomeTimeout(seconds: 20)
+            return
+
+        case .denied, .restricted:
+            pendingSetHome = false
+            status = .denied
+            lastMessage = "Location denied"
+            notifyChange()
+            presentDeniedAlert()
+            return
+
+        case .authorizedAlways, .authorizedWhenInUse:
+            startUpdates()
+            if let loc = usableLocation(manager.location) {
+                finishSetHome(with: loc)
+                return
+            }
+            // One-shot request (more reliable than waiting forever)
+            manager.requestLocation()
+            armSetHomeTimeout(seconds: 15)
+            return
+
+        @unknown default:
+            pendingSetHome = false
+            status = .error("Location unsupported")
+            notifyChange()
+            presentAlert(title: "Rise", text: "Location services are unavailable on this Mac.")
+        }
     }
 
     func clearHome() {
         homeCoordinate = nil
         homeSet = false
+        pendingSetHome = false
+        setHomeTimeout?.invalidate()
         UserDefaults.standard.removeObject(forKey: defaultsHomeLat)
         UserDefaults.standard.removeObject(forKey: defaultsHomeLon)
         UserDefaults.standard.set(false, forKey: defaultsHomeSet)
         status = .homeNotSet
-        pendingSetHome = false
+        lastMessage = "Home cleared"
+        notifyChange()
+        presentAlert(title: "Rise", text: "Home cleared. Breaks run everywhere again.")
     }
 
-    private var pendingSetHome = false
+    // MARK: - Internals
+
+    private func armSetHomeTimeout(seconds: TimeInterval) {
+        setHomeTimeout?.invalidate()
+        setHomeTimeout = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.pendingSetHome else { return }
+                self.pendingSetHome = false
+                self.status = self.homeSet ? self.status : .error("Couldn’t get location")
+                self.lastMessage = "Timed out waiting for location"
+                self.notifyChange()
+                self.presentAlert(
+                    title: "Couldn’t set home",
+                    text: """
+                    Rise didn’t receive a location fix.
+
+                    Check:
+                    • System Settings → Privacy & Security → Location Services is On
+                    • Rise is allowed Location (When In Use)
+                    • Wi‑Fi / network is available (helps Wi‑Fi positioning)
+
+                    Then try “Set Home Here…” again.
+                    """
+                )
+            }
+        }
+        if let t = setHomeTimeout {
+            RunLoop.main.add(t, forMode: .common)
+        }
+    }
+
+    private func finishSetHome(with location: CLLocation) {
+        setHomeTimeout?.invalidate()
+        setHomeTimeout = nil
+        pendingSetHome = false
+        saveHome(coordinate: location.coordinate)
+        lastAccuracy = location.horizontalAccuracy
+        recomputeStatus(with: location)
+        lastMessage = "Home set"
+        notifyChange()
+        let acc = location.horizontalAccuracy > 0
+            ? String(format: "±%.0f m", location.horizontalAccuracy)
+            : "ok"
+        presentAlert(
+            title: "Home set",
+            text: "Rise will run break alerts at home and pause them when you’re away (\(acc))."
+        )
+    }
+
+    private func usableLocation(_ loc: CLLocation?) -> CLLocation? {
+        guard let loc else { return nil }
+        // Reject invalid / ancient / wildly inaccurate fixes
+        guard loc.horizontalAccuracy >= 0, loc.horizontalAccuracy < 5000 else { return nil }
+        guard abs(loc.timestamp.timeIntervalSinceNow) < 120 else { return nil }
+        return loc
+    }
 
     private func loadHome() {
         let ud = UserDefaults.standard
@@ -126,30 +223,100 @@ final class LocationManager: NSObject, ObservableObject {
 
     private func startUpdates() {
         manager.startUpdatingLocation()
-        // Significant changes are cheaper for “at home / away”
-        manager.startMonitoringSignificantLocationChanges()
+        if CLLocationManager.significantLocationChangeMonitoringAvailable() {
+            manager.startMonitoringSignificantLocationChanges()
+        }
     }
 
     private func recomputeStatus(with location: CLLocation? = nil) {
         guard homeSet, let home = homeCoordinate else {
-            status = .homeNotSet
+            if !pendingSetHome { status = .homeNotSet }
             return
         }
-        guard let location = location ?? manager.location else {
+        guard let location = usableLocation(location) ?? usableLocation(manager.location) else {
             status = .locating
+            notifyChange()
             return
         }
         lastAccuracy = location.horizontalAccuracy
         let homeLoc = CLLocation(latitude: home.latitude, longitude: home.longitude)
         let distance = location.distance(from: homeLoc)
         status = distance <= homeRadius ? .atHome : .away
+        notifyChange()
+    }
+
+    private func notifyChange() {
+        objectWillChange.send()
+        onStatusChange?()
+    }
+
+    private func presentDeniedAlert() {
+        presentAlert(
+            title: "Location access needed",
+            text: """
+            Rise needs Location to know when you’re at home.
+
+            System Settings → Privacy & Security → Location Services → Rise
+            Enable “While Using” or “Always”.
+            """,
+            settings: true
+        )
+    }
+
+    private func presentAlert(title: String, text: String, settings: Bool = false) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.alertStyle = .informational
+        if settings {
+            alert.addButton(withTitle: "Open Settings")
+            alert.addButton(withTitle: "OK")
+        } else {
+            alert.addButton(withTitle: "OK")
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        if settings, response == .alertFirstButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+                NSWorkspace.shared.open(url)
+            } else if let url = URL(string: "x-apple.systempreferences:com.apple.Settings.PrivacySecurity.extension") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 }
 
 extension LocationManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            self.refreshAuthorizationAndStart()
+            let status = manager.authorizationStatus
+            switch status {
+            case .authorizedAlways, .authorizedWhenInUse:
+                self.startUpdates()
+                if self.pendingSetHome {
+                    if let loc = self.usableLocation(manager.location) {
+                        self.finishSetHome(with: loc)
+                    } else {
+                        manager.requestLocation()
+                        self.armSetHomeTimeout(seconds: 15)
+                    }
+                } else {
+                    self.recomputeStatus()
+                }
+            case .denied, .restricted:
+                self.pendingSetHome = false
+                self.setHomeTimeout?.invalidate()
+                self.status = .denied
+                self.lastMessage = "Location denied"
+                self.notifyChange()
+                if self.homeSet == false {
+                    self.presentDeniedAlert()
+                }
+            case .notDetermined:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -157,8 +324,10 @@ extension LocationManager: CLLocationManagerDelegate {
         guard let loc = locations.last else { return }
         Task { @MainActor in
             if self.pendingSetHome {
-                self.pendingSetHome = false
-                self.saveHome(coordinate: loc.coordinate)
+                if let good = self.usableLocation(loc) {
+                    self.finishSetHome(with: good)
+                    return
+                }
             }
             self.recomputeStatus(with: loc)
         }
@@ -166,8 +335,20 @@ extension LocationManager: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            if self.homeSet {
+            let msg = error.localizedDescription
+            if self.pendingSetHome {
+                self.pendingSetHome = false
+                self.setHomeTimeout?.invalidate()
+                self.status = .error("Location failed")
+                self.lastMessage = msg
+                self.notifyChange()
+                self.presentAlert(
+                    title: "Couldn’t set home",
+                    text: "Location error: \(msg)\n\nMake sure Location Services is on and try again."
+                )
+            } else if self.homeSet {
                 self.status = .error("Location unavailable")
+                self.notifyChange()
             }
         }
     }

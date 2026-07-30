@@ -230,6 +230,7 @@ final class OverlayPresenter: ObservableObject {
         window.contentView = hosting
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.appearance = ThemeManager.shared.nsAppearance
         // Window-level shadow is always rectangular — use SwiftUI shadow only
         window.hasShadow = false
         window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 2)
@@ -310,6 +311,7 @@ final class OverlayPresenter: ObservableObject {
             window.contentView = hosting
             window.isOpaque = false
             window.backgroundColor = .clear
+            window.appearance = ThemeManager.shared.nsAppearance
             window.hasShadow = false
             window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
             window.collectionBehavior = [
@@ -486,12 +488,22 @@ final class OverlayPresenter: ObservableObject {
 
 struct OverlayRootView: View {
     @ObservedObject var presenter: OverlayPresenter
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         ZStack {
-            Color.black
-                .opacity(presenter.dimOpacity)
-                .ignoresSafeArea()
+            // Organic dim: material + soft wash (light) or deep black (dark)
+            ZStack {
+                if theme.isDark {
+                    theme.dimOverlay
+                } else {
+                    VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                    theme.dimWash
+                    theme.dimOverlay
+                }
+            }
+            .opacity(presenter.dimOpacity)
+            .ignoresSafeArea()
 
             if let model = presenter.currentModel {
                 Group {
@@ -511,9 +523,8 @@ struct OverlayRootView: View {
                 .scaleEffect(presenter.sheetScale)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(theme.colorScheme)
         .onExitCommand {
-            // Don't skip during reward beat
             if !presenter.showReward {
                 presenter.handle(.skip)
             }
@@ -521,22 +532,22 @@ struct OverlayRootView: View {
     }
 }
 
-/// Brief monochrome reward after tapping Done.
 struct CompletionRewardView: View {
     var appeared: Bool
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(theme.rewardCircleFill)
                     .frame(width: 64, height: 64)
                 Circle()
-                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                    .strokeBorder(theme.sheetStroke, lineWidth: 1)
                     .frame(width: 64, height: 64)
                 Image(systemName: "checkmark")
                     .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
                     .scaleEffect(appeared ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
             }
@@ -544,10 +555,10 @@ struct CompletionRewardView: View {
             VStack(spacing: 4) {
                 Text("Nice work")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
                 Text("Break complete")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(theme.textSecondary)
             }
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 6)
@@ -556,36 +567,50 @@ struct CompletionRewardView: View {
         .padding(.vertical, 32)
         .frame(minWidth: 240)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(red: 0.04, green: 0.04, blue: 0.045))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.regularMaterial)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(theme.sheetFill.opacity(theme.isDark ? 1 : 0.55))
                 }
-                .shadow(color: .black.opacity(0.75), radius: 36, y: 16)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(theme.sheetStroke, lineWidth: 0.5)
+                }
+                .shadow(color: theme.sheetShadow, radius: 28, y: 14)
         }
+        .preferredColorScheme(theme.colorScheme)
         .animation(.spring(response: 0.45, dampingFraction: 0.78), value: appeared)
     }
 }
 
 struct SecondaryOLEDView: View {
     @ObservedObject var presenter: OverlayPresenter
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Color.black
-            .opacity(presenter.dimOpacity)
-            .ignoresSafeArea()
-            .preferredColorScheme(.dark)
+        ZStack {
+            if theme.isDark {
+                theme.dimOverlay
+            } else {
+                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                theme.dimWash
+                theme.dimOverlay
+            }
+        }
+        .opacity(presenter.dimOpacity)
+        .ignoresSafeArea()
+        .preferredColorScheme(theme.colorScheme)
     }
 }
 
-// MARK: - Pre-warning pill (reason + window + delay)
+// MARK: - Pre-warning pill
 
 struct WarningPillView: View {
     @ObservedObject var presenter: OverlayPresenter
+    @ObservedObject private var theme = ThemeManager.shared
 
     private let corner: CGFloat = 16
-    private let cardFill = Color(red: 0.06, green: 0.06, blue: 0.065)
 
     var body: some View {
         ZStack {
@@ -597,7 +622,7 @@ struct WarningPillView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(theme.colorScheme)
         .animation(.easeInOut(duration: 0.45), value: presenter.warningCardVisible)
     }
 
@@ -606,29 +631,29 @@ struct WarningPillView: View {
             HStack(alignment: .center, spacing: 12) {
                 ZStack {
                     Circle()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 2.5)
+                        .stroke(theme.hairline.opacity(2), lineWidth: 2.5)
                         .frame(width: 30, height: 30)
                     Circle()
                         .trim(from: 0, to: presenter.warningProgress)
-                        .stroke(Color.white.opacity(0.92), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .stroke(theme.textPrimary.opacity(0.9), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         .frame(width: 30, height: 30)
                         .rotationEffect(.degrees(-90))
                     Text("\(presenter.warningSecondsLeft)")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(theme.textPrimary.opacity(0.9))
                         .monospacedDigit()
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(presenter.warningHeadline)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if !presenter.warningCadenceLine.isEmpty {
                         Text(presenter.warningCadenceLine)
                             .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.42))
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(1)
                     }
                 }
@@ -642,111 +667,53 @@ struct WarningPillView: View {
                 Button("Delay 10 min") {
                     presenter.delayFromWarning(minutes: 10)
                 }
-                .buttonStyle(WarningGhostButtonStyle())
+                .buttonStyle(ThemedSecondaryButtonStyle())
 
                 Button("Delay 5 min") {
                     presenter.delayFromWarning(minutes: 5)
                 }
-                .buttonStyle(WarningSolidButtonStyle())
+                .buttonStyle(ThemedPrimaryButtonStyle())
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .frame(width: 408)
-        .background(cardFill)
+        .background {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .fill(theme.sheetFill.opacity(theme.isDark ? 1 : 0.65))
+                }
+        }
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
+                .strokeBorder(theme.sheetStroke, lineWidth: 0.5)
         )
         .compositingGroup()
-        .shadow(color: .black.opacity(0.55), radius: 18, y: 8)
+        .shadow(color: theme.sheetShadow, radius: 18, y: 8)
     }
 }
 
-// MARK: - Warning pill button styles (monochrome, with hover)
+/// AppKit material bridge for light-mode organic glass dim.
+struct VisualEffectBlur: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
 
-/// Primary delay — solid white on OLED
-struct WarningSolidButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        WarningSolidButton(configuration: configuration)
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = material
+        v.blendingMode = blendingMode
+        v.state = .active
+        v.isEmphasized = true
+        return v
     }
 
-    private struct WarningSolidButton: View {
-        let configuration: ButtonStyle.Configuration
-        @State private var hovering = false
-
-        var body: some View {
-            configuration.label
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(configuration.isPressed ? 0.7 : 1))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(fill)
-                )
-                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.03 : 1))
-                .animation(.easeOut(duration: 0.12), value: hovering)
-                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-                .onHover { hovering = $0 }
-        }
-
-        private var fill: Color {
-            if configuration.isPressed { return Color(white: 0.78) }
-            if hovering { return Color(white: 0.94) }
-            return .white
-        }
-    }
-}
-
-/// Secondary delay — outlined ghost
-struct WarningGhostButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        WarningGhostButton(configuration: configuration)
-    }
-
-    private struct WarningGhostButton: View {
-        let configuration: ButtonStyle.Configuration
-        @State private var hovering = false
-
-        var body: some View {
-            configuration.label
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(labelOpacity))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(fillOpacity))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .strokeBorder(Color.white.opacity(borderOpacity), lineWidth: 1)
-                        )
-                )
-                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.03 : 1))
-                .animation(.easeOut(duration: 0.12), value: hovering)
-                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-                .onHover { hovering = $0 }
-        }
-
-        private var fillOpacity: Double {
-            if configuration.isPressed { return 0.14 }
-            if hovering { return 0.12 }
-            return 0.0
-        }
-
-        private var borderOpacity: Double {
-            if configuration.isPressed { return 0.28 }
-            if hovering { return 0.32 }
-            return 0.18
-        }
-
-        private var labelOpacity: Double {
-            if configuration.isPressed { return 0.7 }
-            if hovering { return 1.0 }
-            return 0.82
-        }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+        nsView.state = .active
     }
 }
 

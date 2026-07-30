@@ -99,7 +99,7 @@ final class RoutineScheduler: ObservableObject {
     }
 
     func formatCountdown(_ seconds: TimeInterval) -> String {
-        let s = Int(seconds.rounded(.down))
+        let s = max(0, Int(seconds.rounded(.down)))
         let h = s / 3600
         let m = (s % 3600) / 60
         let sec = s % 60
@@ -107,6 +107,14 @@ final class RoutineScheduler: ObservableObject {
             return String(format: "%d:%02d:%02d", h, m, sec)
         }
         return String(format: "%d:%02d", m, sec)
+    }
+
+    /// Wall-clock time the user will be notified (local).
+    func formatNotifyTime(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f.string(from: date)
     }
 
     func layerTitle(_ layer: String) -> String {
@@ -118,15 +126,19 @@ final class RoutineScheduler: ObservableObject {
         }
     }
 
-    var statusBarTitle: String {
+    /// Human reason schedule is idle (if any).
+    var idleReason: String? {
         if isPaused { return "Paused" }
         if let until = snoozeUntil, until > now {
-            return "Zzz \(formatCountdown(until.timeIntervalSince(now)))"
+            return "Snoozed · \(formatCountdown(until.timeIntervalSince(now))) left"
         }
-        if !inWorkWindow(now) { return "Off hours" }
-        if inQuietLunch(now) { return "Lunch" }
-        if !config.enabled { return "Off" }
-        return "\(layerTitle(nextLayer)) \(formatCountdown(nextSeconds))"
+        if !config.enabled { return "Schedule off" }
+        if !inWorkWindow(now) { return "Outside work hours" }
+        if inQuietLunch(now) { return "Quiet lunch" }
+        if !LocationManager.shared.allowsRoutine {
+            return LocationManager.shared.status.menuLabel
+        }
+        return nil
     }
 
     // MARK: - Mutations
@@ -161,6 +173,8 @@ final class RoutineScheduler: ObservableObject {
         objectWillChange.send()
 
         guard config.enabled, !isPaused else { return }
+        // Home geofence: only remind at home (if home is configured)
+        guard LocationManager.shared.allowsRoutine else { return }
         if let until = snoozeUntil {
             if until > now { return }
             snoozeUntil = nil

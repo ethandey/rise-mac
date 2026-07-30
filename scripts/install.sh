@@ -20,9 +20,7 @@ if [[ ! -x "$BINARY" ]]; then
     echo "error: native/ not found at $ROOT/native" >&2
     exit 1
   fi
-  (cd "$ROOT/native" && swift build -c release)
-  mkdir -p "$ROOT/bin"
-  cp -f "$ROOT/native/.build/release/DeskHealthOverlay" "$BINARY"
+  (cd "$ROOT/native" && bash build.sh)
 fi
 chmod +x "$BINARY"
 

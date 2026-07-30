@@ -1,6 +1,6 @@
 import AppKit
 
-/// Menu bar: live countdowns, start layers, organic appearance switcher.
+/// Menu bar: icon only; dropdown shows notify time + time left, location, theme.
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
@@ -9,12 +9,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private let scheduler = RoutineScheduler.shared
     private let theme = ThemeManager.shared
+    private let location = LocationManager.shared
 
     func install(app: AppDelegate) {
         self.app = app
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Square length = icon only (no countdown title in the bar)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.imagePosition = .imageLeading
+            button.imagePosition = .imageOnly
+            button.title = ""
             if let image = NSImage(
                 systemSymbolName: "figure.mind.and.body",
                 accessibilityDescription: "Rise"
@@ -22,7 +25,6 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 image.isTemplate = true
                 button.image = image
             }
-            button.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
             button.toolTip = "Rise"
         }
         let menu = NSMenu()
@@ -31,35 +33,44 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         statusItem = item
 
         rebuildMenu()
-        updateStatusTitle()
+        updateTooltip()
 
-        // Live countdown in the bar + menu rebuild when opened
         let t = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.updateStatusTitle()
+                self?.updateTooltip()
+                // Keep menu fresh if open
+                if self?.statusItem?.menu?.numberOfItems ?? 0 > 0 {
+                    // only rebuild when menu is open via menuWillOpen
+                }
             }
         }
         RunLoop.main.add(t, forMode: .common)
         refreshTimer = t
+
+        // Location status changes should refresh menu next open + tooltip
+        // (ObservableObject updates are fine; tooltip polls every second)
     }
 
     func refresh() {
-        updateStatusTitle()
+        updateTooltip()
         rebuildMenu()
     }
-
-    // MARK: - NSMenuDelegate
 
     func menuWillOpen(_ menu: NSMenu) {
         rebuildMenu()
     }
 
-    // MARK: - Status title
-
-    private func updateStatusTitle() {
+    private func updateTooltip() {
         guard let button = statusItem?.button else { return }
-        let text = " \(scheduler.statusBarTitle)"
-        button.title = text
+        // Icon-only bar; put the next notify summary in the tooltip
+        if let idle = scheduler.idleReason {
+            button.toolTip = "Rise · \(idle)"
+            return
+        }
+        let layer = scheduler.nextLayer
+        let at = scheduler.formatNotifyTime(scheduler.nextDue(for: layer))
+        let left = scheduler.formatCountdown(scheduler.secondsUntil(layer: layer))
+        button.toolTip = "Rise · \(scheduler.layerTitle(layer)) at \(at) · in \(left)"
     }
 
     // MARK: - Menu
@@ -68,19 +79,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         guard let menu = statusItem?.menu else { return }
         menu.removeAllItems()
 
-        // Header
         addDisabled(menu, "Rise")
         menu.addItem(.separator())
 
-        // Live countdowns
-        addDisabled(menu, "Next breaks")
-        addCountdownRow(menu, layer: "A", label: "Eyes")
-        addCountdownRow(menu, layer: "B", label: "Stretch")
-        addCountdownRow(menu, layer: "C", label: "Bands")
+        // Notify schedule: when + time left
+        addDisabled(menu, "Upcoming")
+        addNotifyRow(menu, layer: "A", label: "Eyes")
+        addNotifyRow(menu, layer: "B", label: "Stretch")
+        addNotifyRow(menu, layer: "C", label: "Bands")
 
-        if let until = scheduler.snoozeUntil, until > scheduler.now {
-            let left = scheduler.formatCountdown(until.timeIntervalSince(scheduler.now))
-            addDisabled(menu, "Snoozed · \(left)")
+        if let idle = scheduler.idleReason {
+            addDisabled(menu, idle)
         }
 
         menu.addItem(.separator())
@@ -95,7 +104,23 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        // Appearance — feels like a system Settings control
+        // Location / home geofence
+        addDisabled(menu, "Location")
+        addDisabled(menu, location.status.menuLabel)
+        if location.homeSet {
+            if location.status == .away {
+                addDisabled(menu, "Alerts pause while away")
+            } else if location.status == .atHome {
+                addDisabled(menu, "Alerts on at home")
+            }
+            _ = add(menu, "Clear Home", #selector(clearHome))
+        } else {
+            _ = add(menu, "Set Home Here…", #selector(setHome))
+        }
+
+        menu.addItem(.separator())
+
+        // Appearance
         let appearance = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
         let sub = NSMenu(title: "Appearance")
         for mode in ThemeManager.Mode.allCases {
@@ -113,15 +138,16 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(appearance)
     }
 
-    private func addCountdownRow(_ menu: NSMenu, layer: String, label: String) {
+    /// e.g. "Eyes  ·  2:34 PM  ·  in 12:34"
+    private func addNotifyRow(_ menu: NSMenu, layer: String, label: String) {
+        let dueDate = scheduler.nextDue(for: layer)
+        let at = scheduler.formatNotifyTime(dueDate)
         let sec = scheduler.secondsUntil(layer: layer)
-        let time = scheduler.formatCountdown(sec)
-        let due = sec <= 0 ? "due" : time
-        let title = "\(label)  ·  \(due)"
+        let left = sec <= 0 ? "now" : "in \(scheduler.formatCountdown(sec))"
+        let title = "\(label)  ·  \(at)  ·  \(left)"
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
-        // Emphasize the next one slightly via attributed title
-        if layer == scheduler.nextLayer {
+        if layer == scheduler.nextLayer, scheduler.idleReason == nil {
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.menuBarFont(ofSize: 0),
                 .foregroundColor: NSColor.labelColor
@@ -162,6 +188,19 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func startC() {
         app?.startSequence([BreakModel.builtin(layer: "C", testMode: false)], oneShot: false)
+    }
+
+    @objc private func setHome() {
+        location.setHomeHere()
+        // macOS will prompt for location permission on first use
+        rebuildMenu()
+        updateTooltip()
+    }
+
+    @objc private func clearHome() {
+        location.clearHome()
+        rebuildMenu()
+        updateTooltip()
     }
 
     @objc private func setAppearance(_ sender: NSMenuItem) {

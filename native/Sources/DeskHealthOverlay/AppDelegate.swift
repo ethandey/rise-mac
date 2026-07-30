@@ -69,9 +69,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func wireScheduler() {
         scheduler.onLayerDue = { [weak self] layer in
-            guard let self, !self.isPresenting else { return }
+            guard let self else { return false }
+            if self.isPresenting {
+                fputs("rise: layer \(layer) due but overlay busy — will retry\n", stderr)
+                return false
+            }
+            fputs("rise: presenting scheduled layer \(layer)\n", stderr)
             let model = BreakModel.builtin(layer: layer, testMode: false)
             self.startSequence([model], oneShot: false)
+            return true
         }
     }
 

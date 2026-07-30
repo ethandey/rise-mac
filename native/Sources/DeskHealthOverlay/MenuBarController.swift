@@ -102,10 +102,20 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        // Location / home geofence
+        // Location / home geofence (300 m)
         addDisabled(menu, "Location")
         addDisabled(menu, location.status.menuLabel)
         if location.homeSet {
+            if let addr = location.homeAddress, !addr.isEmpty {
+                // Keep menu readable — split long addresses
+                let short = addr.count > 48 ? String(addr.prefix(45)) + "…" : addr
+                addDisabled(menu, short)
+            }
+            if let d = location.distanceFromHome {
+                addDisabled(menu, String(format: "%.0f m from home · zone %d m", d, Int(location.homeRadius)))
+            } else {
+                addDisabled(menu, "Home zone \(Int(location.homeRadius)) m")
+            }
             if location.status == .away {
                 addDisabled(menu, "Alerts pause while away")
             } else if location.status == .atHome {

@@ -1,16 +1,19 @@
 import Foundation
 import Combine
+import os.log
 
-/// Native break routine — A/B/C intervals with work hours, lunch quiet, snooze.
+private let log = Logger(subsystem: "app.rise.menubar", category: "scheduler")
+
+/// Native break routine — A/B/C intervals with work hours 07:00–20:00, home geofence, snooze.
 @MainActor
 final class RoutineScheduler: ObservableObject {
     static let shared = RoutineScheduler()
 
     struct Config: Equatable {
         var enabled: Bool = true
-        var workdayStart: String = "09:00"
-        var workdayEnd: String = "18:00"
-        var quietLunch: Bool = true
+        var workdayStart: String = "07:00"
+        var workdayEnd: String = "20:00"
+        var quietLunch: Bool = false
         var quietLunchStart: String = "12:00"
         var quietLunchEnd: String = "13:00"
         var intervals: [String: Int] = ["A": 20, "B": 40, "C": 90]
@@ -24,9 +27,9 @@ final class RoutineScheduler: ObservableObject {
     @Published private(set) var snoozeUntil: Date?
     @Published private(set) var now: Date = Date()
     @Published private(set) var isPaused: Bool = false
+    @Published private(set) var lastSkipReason: String?
 
-    /// Fired when a layer becomes due (highest priority only).
-    var onLayerDue: ((String) -> Void)?
+    var onLayerDue: ((String) -> Bool)?
 
     private var timer: Timer?
     private var lastFiredMinute: String?
@@ -39,12 +42,14 @@ final class RoutineScheduler: ObservableObject {
         statePath = (data as NSString).appendingPathComponent("rise-routine.json")
         loadConfig()
         loadState()
-        // Seed last_* to now so first day doesn't fire all layers immediately
+        clearExpiredSnooze()
+        // Seed last_* so first A is ~interval later (not an instant blast on install)
         let n = Date()
         if lastA == nil { lastA = n }
         if lastB == nil { lastB = n }
         if lastC == nil { lastC = n }
         saveState()
+        log.info("scheduler ready work=\(self.config.workdayStart, privacy: .public)–\(self.config.workdayEnd, privacy: .public)")
     }
 
     func start() {
@@ -56,6 +61,7 @@ final class RoutineScheduler: ObservableObject {
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        // Run immediately so overdue layers fire without waiting a full minute
         tick()
     }
 
@@ -88,7 +94,6 @@ final class RoutineScheduler: ObservableObject {
         max(0, nextDue(for: layer).timeIntervalSince(now))
     }
 
-    /// Highest-priority layer among those with the soonest due (for status bar).
     var nextLayer: String {
         let layers = ["A", "B", "C"]
         return layers.min { secondsUntil(layer: $0) < secondsUntil(layer: $1) } ?? "A"
@@ -109,7 +114,6 @@ final class RoutineScheduler: ObservableObject {
         return String(format: "%d:%02d", m, sec)
     }
 
-    /// Wall-clock time the user will be notified (local).
     func formatNotifyTime(_ date: Date) -> String {
         let f = DateFormatter()
         f.timeStyle = .short
@@ -126,17 +130,22 @@ final class RoutineScheduler: ObservableObject {
         }
     }
 
-    /// Human reason schedule is idle (if any).
     var idleReason: String? {
         if isPaused { return "Paused" }
         if let until = snoozeUntil, until > now {
             return "Snoozed · \(formatCountdown(until.timeIntervalSince(now))) left"
         }
         if !config.enabled { return "Schedule off" }
-        if !inWorkWindow(now) { return "Outside work hours" }
+        if !inWorkWindow(now) {
+            return "Outside hours (\(config.workdayStart)–\(config.workdayEnd))"
+        }
         if inQuietLunch(now) { return "Quiet lunch" }
         if !LocationManager.shared.allowsRoutine {
-            return LocationManager.shared.status.menuLabel
+            let loc = LocationManager.shared
+            if loc.status == .away, let d = loc.distanceFromHome {
+                return String(format: "Away from home (%.0f m · need ≤%.0f m)", d, loc.homeRadius)
+            }
+            return loc.status.menuLabel
         }
         return nil
     }
@@ -154,11 +163,13 @@ final class RoutineScheduler: ObservableObject {
             lastA = n
         }
         saveState()
+        log.info("completed layer \(layer, privacy: .public)")
     }
 
     func snooze(minutes: Int) {
-        snoozeUntil = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        snoozeUntil = Date().addingTimeInterval(TimeInterval(max(1, minutes) * 60))
         saveState()
+        log.info("snoozed \(minutes)m until \(self.snoozeUntil!.description, privacy: .public)")
     }
 
     func clearSnooze() {
@@ -170,35 +181,74 @@ final class RoutineScheduler: ObservableObject {
 
     private func tick() {
         now = Date()
+        clearExpiredSnooze()
         objectWillChange.send()
 
-        guard config.enabled, !isPaused else { return }
-        // Home geofence: only remind at home (if home is configured)
-        guard LocationManager.shared.allowsRoutine else { return }
-        if let until = snoozeUntil {
-            if until > now { return }
-            snoozeUntil = nil
-            saveState()
+        guard config.enabled, !isPaused else {
+            lastSkipReason = isPaused ? "paused" : "disabled"
+            return
         }
-        guard inWorkWindow(now), !inQuietLunch(now) else { return }
+        guard LocationManager.shared.allowsRoutine else {
+            lastSkipReason = "location:\(LocationManager.shared.status.menuLabel)"
+            return
+        }
+        if let until = snoozeUntil, until > now {
+            lastSkipReason = "snoozed"
+            return
+        }
+        guard inWorkWindow(now) else {
+            lastSkipReason = "outside work hours"
+            return
+        }
+        guard !inQuietLunch(now) else {
+            lastSkipReason = "quiet lunch"
+            return
+        }
 
-        // At most one auto-fire per wall-clock minute
+        // Find highest-priority due layer
+        var dueLayer: String?
+        for layer in ["C", "B", "A"] {
+            if secondsUntil(layer: layer) <= 0 {
+                dueLayer = layer
+                break
+            }
+        }
+        guard let layer = dueLayer else {
+            lastSkipReason = nil
+            return
+        }
+
+        // At most one auto-fire per wall-clock minute (set only when we actually hand off)
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd HH:mm"
         let minuteKey = df.string(from: now)
-        guard minuteKey != lastFiredMinute else { return }
+        if minuteKey == lastFiredMinute {
+            lastSkipReason = "already fired this minute"
+            return
+        }
 
-        // Priority C > B > A
-        for layer in ["C", "B", "A"] {
-            if secondsUntil(layer: layer) <= 0 {
+        lastSkipReason = nil
+        log.info("firing layer \(layer, privacy: .public)")
+        if let handler = onLayerDue {
+            let started = handler(layer)
+            if started {
                 lastFiredMinute = minuteKey
-                onLayerDue?(layer)
-                return
+            } else {
+                lastSkipReason = "handler busy"
+                log.info("layer \(layer, privacy: .public) not accepted — will retry")
             }
         }
     }
 
-    // MARK: - Work window
+    private func clearExpiredSnooze() {
+        if let until = snoozeUntil, until <= now {
+            snoozeUntil = nil
+            saveState()
+            log.info("cleared expired snooze")
+        }
+    }
+
+    // MARK: - Work window (07:00–20:00)
 
     private func inWorkWindow(_ date: Date) -> Bool {
         guard let start = timeToday(config.workdayStart, on: date),
@@ -262,13 +312,19 @@ final class RoutineScheduler: ObservableObject {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: statePath)),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter()
         func parse(_ s: String?) -> Date? {
             guard let s else { return nil }
-            return iso.date(from: s) ?? iso2.date(from: s)
-                ?? ISO8601DateFormatter().date(from: s)
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = iso.date(from: s) { return d }
+            iso.formatOptions = [.withInternetDateTime]
+            if let d = iso.date(from: s) { return d }
+            // Fallback: "2026-07-30T01:06:11Z"
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = TimeZone(secondsFromGMT: 0)
+            f.dateFormat = "yyyy-MM-dd'T'HH:mm:ssX"
+            return f.date(from: s)
         }
         lastA = parse(json["last_A"] as? String)
         lastB = parse(json["last_B"] as? String)
@@ -289,6 +345,7 @@ final class RoutineScheduler: ObservableObject {
         if let s = fmt(lastB) { dict["last_B"] = s }
         if let s = fmt(lastC) { dict["last_C"] = s }
         if let s = fmt(snoozeUntil) { dict["snooze_until"] = s }
+        else { dict["snooze_until"] = NSNull() }
         if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: statePath), options: .atomic)
         }

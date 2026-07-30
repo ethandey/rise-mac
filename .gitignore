@@ -14,6 +14,7 @@ data/state.json
 data/*.log
 data/desk_health.pid
 data/rise-menubar.lock
+data/rise-routine.json
 data/config.json
 
 # Python

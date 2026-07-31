@@ -76,6 +76,7 @@ After install:
 | **Set Home Here** | Pin home to your current location |
 | **Set Office Here** | Pin office (same routine as home) |
 | **Standing desk** | Per place; enables sit/stand switch |
+| **About Rise…** | Version, plus a GitHub check for newer releases |
 
 ```bash
 bin/rise --menubar

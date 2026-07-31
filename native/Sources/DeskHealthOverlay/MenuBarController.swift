@@ -263,6 +263,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         appearance.submenu = sub
         appearance.isEnabled = true
         menu.addItem(appearance)
+
+        // —— About (version + GitHub update check) ——
+        menu.addItem(.separator())
+        let about = NSMenuItem(
+            title: "About Rise…",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        about.target = self
+        about.isEnabled = true
+        menu.addItem(about)
     }
 
     /// Top bar + location status tick live; mode rows only when minutes change.
@@ -479,4 +490,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         app?.appearanceDidChange()
         keepMenuOpen()
     }
+
+    @objc private func showAbout() {
+        // Check GitHub releases/tags, then show About + update status
+        UpdateChecker.presentAbout()
+    }
 }
+

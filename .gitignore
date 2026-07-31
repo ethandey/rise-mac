@@ -1,6 +1,10 @@
 # Built native binary / app (install.sh / package-app.sh produce them)
 bin/DeskHealthOverlay
 bin/Rise.app/
+dist/
+
+# Icon build intermediates (keep AppIcon.icns + 1024 master)
+assets/AppIcon/AppIcon.iconset/
 
 # Swift / SPM
 .build/

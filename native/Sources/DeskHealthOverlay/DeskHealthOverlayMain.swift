@@ -121,7 +121,7 @@ enum DeskHealthOverlayMain {
 
         if let layer {
             guard ["A", "B", "C"].contains(layer) else { throw CLIError.badLayer(layer) }
-            let model = BreakModel.builtin(layer: layer, testMode: false)
+            let model = BreakModel.builtin(layer: layer, position: .sitting, testMode: false)
             if menubar {
                 return .menuBar(autoSequence: [model])
             }

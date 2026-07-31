@@ -1,2 +1,2 @@
 #!/bin/bash
-exec "$(dirname "$0")/DeskHealthOverlay" "$@"
+exec "/Applications/Rise.app/Contents/MacOS/Rise" "$@"

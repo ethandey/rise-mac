@@ -72,40 +72,52 @@ Full protocol: [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
 ## Install (macOS)
 
+### Easy (app)
+
 ```bash
 git clone https://github.com/ethandey/rise-mac.git
 cd rise-mac
 bash scripts/install.sh
 ```
 
-That builds the Swift overlay if needed, installs a LaunchAgent (`app.rise.menubar`), starts Rise now, and starts it again at every login.
+That builds **Rise.app**, installs it to **`/Applications/Rise.app`**, starts the menu bar agent at login, and uses:
 
-**Requirements:** macOS, Xcode Command Line Tools (`xcode-select --install`) for rebuilds.
+`~/Library/Application Support/Rise` for config and logs.
 
-Rebuild after Swift changes:
+Or build only and drag the app yourself:
 
 ```bash
-bash native/build.sh
-# or re-run scripts/install.sh
+bash scripts/package-app.sh
+open dist/          # Rise.app + Rise-1.1.0.zip
+# Drag Rise.app → Applications, then open it once
 ```
+
+**Requirements:** macOS 13+, Xcode Command Line Tools (`xcode-select --install`) to rebuild.
+
+### What you get
+
+- Native **Rise.app** with a Tahoe-style sunrise icon  
+- Menu bar coach (no Dock icon — accessory app)  
+- Home + office places, café soft mode when away  
+- Active-time clocks (no nag mid-video / mid-walk)
 
 ---
 
 ## Usage
 
-Menu bar icon (figure / mind-body) near the clock:
+Menu bar icon near the clock:
 
 | Action | What it does |
 |--------|----------------|
-| Start Eyes + Posture | Layer A now |
-| Start Stand + Stretch | Layer B now |
-| Start Band Circuit | Layer C now |
+| Modes → Eyes / Change / Walk | Start a break now |
+| Set Home Here / Set Office Here | Pin current location |
+| Standing desk (per place) | Sit/stand switch layer |
 
 CLI:
 
 ```bash
 bin/rise --menubar          # menu bar only
-bin/rise --layer A          # single break (with warning + Done)
+bin/rise --layer A          # single break
 bin/rise --layer B
 bin/rise --layer C
 ```
@@ -118,7 +130,7 @@ bin/rise --layer C
 bash scripts/uninstall.sh
 ```
 
-Removes the login item. Leaves `data/` so a reinstall keeps preferences.
+Removes the login item and `/Applications/Rise.app`. Leaves Application Support prefs so a reinstall keeps settings.
 
 ---
 

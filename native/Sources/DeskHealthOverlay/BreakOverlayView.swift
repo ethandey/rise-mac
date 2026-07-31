@@ -113,11 +113,7 @@ struct BreakOverlayView: View {
 
     private var actions: some View {
         HStack(spacing: 10) {
-            Button("Skip") { onAction(.skip) }
-                .keyboardShortcut(.escape, modifiers: [])
-                .buttonStyle(ThemedSecondaryButtonStyle())
-
-            Button("Snooze") { onAction(.snooze(minutes: 5)) }
+            Button("Snooze 5 min") { onAction(.snooze(minutes: 5)) }
                 .buttonStyle(ThemedSecondaryButtonStyle())
 
             Spacer(minLength: 8)

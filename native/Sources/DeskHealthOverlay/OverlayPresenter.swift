@@ -7,6 +7,7 @@ final class OverlayPresenter: ObservableObject {
     enum Phase: Equatable {
         case idle
         case warning
+        case softEyes
         case presenting
     }
 
@@ -98,7 +99,62 @@ final class OverlayPresenter: ObservableObject {
         self.warningSecondsLeft = Int(warningDuration.rounded())
         self.warningCardVisible = false
 
+        // Soft eyes: floating pill only — no full-screen dim
+        if models.count == 1, models[0].severity == .soft {
+            beginSoftEyes()
+            return
+        }
         beginWarning()
+    }
+
+    /// Soft floating card — eyes micro OR café extended checklist (no OLED takeover).
+    private func beginSoftEyes() {
+        phase = .softEyes
+        showSoftEyesPill()
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.4)) {
+                self.warningCardVisible = true
+            }
+        }
+    }
+
+    private func showSoftEyesPill() {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return }
+        let root = SoftEyesPillView(presenter: self)
+        let hosting = NSHostingView(rootView: root)
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.layer?.cornerRadius = 18
+        hosting.layer?.masksToBounds = true
+        if #available(macOS 11.0, *) {
+            hosting.layer?.cornerCurve = .continuous
+        }
+        // Room for café extended checklist (6 steps) without clipping shadow
+        let rows = models.first?.displayRows.count ?? 3
+        let height = min(520, CGFloat(150 + rows * 48))
+        let size = NSSize(width: 420, height: height)
+        let visible = screen.visibleFrame
+        let origin = NSPoint(
+            x: visible.midX - size.width / 2,
+            y: visible.maxY - size.height - 24
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: origin, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hosting
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.appearance = ThemeManager.shared.nsAppearance
+        window.hasShadow = false
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 2)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        window.isReleasedWhenClosed = false
+        window.orderFrontRegardless()
+        warningWindow = window
     }
 
     func cancelAll() {
@@ -167,9 +223,9 @@ final class OverlayPresenter: ObservableObject {
         timers.append(timer)
     }
 
-    /// Fade the pill out, then complete (used by Delay).
+    /// Fade the pill out, then complete (used by Delay / soft eyes).
     private func dismissWarningGracefully(action: BreakAction) {
-        guard phase == .warning, !finished else { return }
+        guard phase == .warning || phase == .softEyes, !finished else { return }
         finished = true
         invalidateTimers()
 
@@ -351,8 +407,7 @@ final class OverlayPresenter: ObservableObject {
 
     private func finish(_ action: BreakAction) {
         guard !finished else { return }
-        // Warning dismiss always goes through the soft path
-        if phase == .warning {
+        if phase == .warning || phase == .softEyes {
             dismissWarningGracefully(action: action)
             return
         }
@@ -360,6 +415,7 @@ final class OverlayPresenter: ObservableObject {
         finished = true
         invalidateTimers()
 
+        // Soft-style exits for skip/snooze; Done gets reward only on firm overlays
         if action == .done {
             playDoneRewardThenExit(action: action)
         } else {
@@ -524,11 +580,7 @@ struct OverlayRootView: View {
             }
         }
         .preferredColorScheme(theme.colorScheme)
-        .onExitCommand {
-            if !presenter.showReward {
-                presenter.handle(.skip)
-            }
-        }
+        // No Escape-to-skip — complete with Done or Snooze only
     }
 }
 
@@ -693,6 +745,112 @@ struct WarningPillView: View {
         )
         .compositingGroup()
         .shadow(color: theme.sheetShadow, radius: 18, y: 8)
+    }
+}
+
+// MARK: - Soft eyes pill (no full-screen)
+
+struct SoftEyesPillView: View {
+    @ObservedObject var presenter: OverlayPresenter
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let model = presenter.currentModel
+        let symbol = model?.symbolName ?? "eye"
+        let isExtended = (model?.displayRows.count ?? 0) > 3
+        ZStack {
+            Color.clear
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text(model?.title ?? "Eyes")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(theme.textPrimary)
+                            if isExtended {
+                                Text("Soft")
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(theme.chipText)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(theme.chipFill))
+                            }
+                        }
+                        Text(model?.subtitle.isEmpty == false ? (model?.subtitle ?? "") : (model?.durationHint ?? ""))
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                if let reason = model?.reason, isExtended, !reason.isEmpty {
+                    Text(reason)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let rows = model?.displayRows {
+                    VStack(alignment: .leading, spacing: isExtended ? 8 : 6) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("\(i + 1). \(row.action)")
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundStyle(theme.textPrimary)
+                                Spacer(minLength: 8)
+                                if !row.duration.isEmpty {
+                                    Text(row.duration)
+                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .foregroundStyle(theme.textPrimary)
+                                        .monospacedDigit()
+                                }
+                            }
+                            if !row.detail.isEmpty {
+                                Text(row.detail)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(theme.textCue)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+
+                HStack {
+                    Button("Snooze 5 min") { presenter.handle(.snooze(minutes: 5)) }
+                        .buttonStyle(ThemedSecondaryButtonStyle())
+                    Spacer()
+                    Button("Done") { presenter.handle(.done) }
+                        .buttonStyle(ThemedPrimaryButtonStyle())
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(isExtended ? 18 : 16)
+            .frame(width: isExtended ? 380 : 340)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(theme.sheetFill.opacity(theme.isDark ? 1 : 0.65))
+                    }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(theme.sheetStroke, lineWidth: 0.5)
+            )
+            .shadow(color: theme.sheetShadow, radius: 16, y: 8)
+            .opacity(presenter.warningCardVisible ? 1 : 0)
+            .offset(y: presenter.warningCardVisible ? 0 : -10)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .preferredColorScheme(theme.colorScheme)
+        .animation(.easeInOut(duration: 0.35), value: presenter.warningCardVisible)
     }
 }
 

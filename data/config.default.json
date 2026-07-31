@@ -5,12 +5,13 @@
   "quiet_lunch": false,
   "quiet_lunch_start": "12:00",
   "quiet_lunch_end": "13:00",
-  "layer_c_preference": "bands",
+  "has_standing_desk": true,
   "snooze_minutes": 5,
   "intervals": {
-    "A": 20,
+    "A": 25,
     "B": 40,
-    "C": 90
+    "C": 90,
+    "S": 30
   },
   "sound": "Purr",
   "tick_seconds": 20,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uninstall Rise LaunchAgent (leaves data/ and config intact).
+# Uninstall Rise LaunchAgent (optional: remove /Applications/Rise.app).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -7,6 +7,8 @@ LABEL="app.rise.menubar"
 PLIST_DST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 UID_NUM="$(id -u)"
 DOMAIN="gui/${UID_NUM}"
+APP_INSTALL="/Applications/Rise.app"
+SUPPORT="${HOME}/Library/Application Support/Rise"
 
 echo "==> Rise uninstall"
 
@@ -17,6 +19,11 @@ else
   echo "    agent not loaded"
 fi
 
+# shellcheck disable=SC2009
+ps -axo pid=,args= | grep -E '[R]ise.app/Contents/MacOS/Rise|[D]eskHealthOverlay --menubar' | awk '{print $1}' | while read -r pid; do
+  kill "$pid" 2>/dev/null || true
+done
+
 if [[ -f "$PLIST_DST" ]]; then
   rm -f "$PLIST_DST"
   echo "    removed $PLIST_DST"
@@ -24,13 +31,15 @@ else
   echo "    no plist at $PLIST_DST"
 fi
 
+if [[ -d "$APP_INSTALL" ]]; then
+  rm -rf "$APP_INSTALL"
+  echo "    removed $APP_INSTALL"
+fi
+
 echo ""
-echo "✓ Rise login item removed"
-echo "  data/ and config left intact at: $ROOT/data"
-echo ""
-echo "To remove the login item fully:"
-echo "  • This script already unloaded app.rise.menubar from launchd."
-echo "  • If it still appears under System Settings → General → Login Items,"
-echo "    remove “Rise” / DeskHealthOverlay there as well."
+echo "✓ Rise login item and Applications app removed"
+echo "  Preferences left at: $SUPPORT"
+echo "  Repo data (if any):  $ROOT/data"
 echo ""
 echo "  reinstall with: bash $ROOT/scripts/install.sh"
+echo "  or drag dist/Rise.app into Applications"

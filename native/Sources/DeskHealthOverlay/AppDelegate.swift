@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Application host: menu bar, routine scheduler, overlay presentation.
+/// Application host: menu bar, routine scheduler, soft eyes + firm overlays.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let mode: LaunchMode
@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appearanceObserver: NSObjectProtocol?
 
     var isPresenting: Bool { presenter.phase != .idle }
+    var schedulerRef: RoutineScheduler { scheduler }
 
     init(mode: LaunchMode) {
         self.mode = mode
@@ -30,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                // System theme changed — refresh if mode is Automatic
                 ThemeManager.shared.objectWillChange.send()
                 self?.menuBar.refresh()
             }
@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .menuBar(let auto):
             menuBar.install(app: self)
             wireScheduler()
+            // Activity monitor starts with scheduler — firm grace after launch
             scheduler.start()
             if let auto, !auto.isEmpty {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
@@ -48,6 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         case .oneShot(let models):
+            // One-shot: no grace delay — user asked for it
+            ActivityMonitor.shared.clearFirmDefer()
             startSequence(models, oneShot: true)
         }
     }
@@ -71,17 +74,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduler.onLayerDue = { [weak self] layer in
             guard let self else { return false }
             if self.isPresenting {
-                fputs("rise: layer \(layer) due but overlay busy — will retry\n", stderr)
+                fputs("rise: layer \(layer) due but busy — retry\n", stderr)
                 return false
             }
-            fputs("rise: presenting scheduled layer \(layer)\n", stderr)
-            let model = BreakModel.builtin(layer: layer, testMode: false)
+            let venue = self.scheduler.breakVenue
+            fputs(
+                "rise: scheduled \(layer) pos=\(self.scheduler.deskPosition.rawValue) venue=\(venue.rawValue)\n",
+                stderr
+            )
+            let model = BreakModel.builtin(
+                layer: layer,
+                position: self.scheduler.deskPosition,
+                testMode: false,
+                venue: venue
+            )
             self.startSequence([model], oneShot: false)
             return true
         }
     }
 
-    /// Start a break sequence (single layer or multi).
     func startSequence(_ models: [BreakModel], oneShot: Bool) {
         guard presenter.phase == .idle else { return }
         self.oneShot = oneShot
@@ -89,8 +100,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.refresh()
 
         let primaryLayer = models.first?.layer.uppercased() ?? "A"
+        let venue = scheduler.breakVenue
+        // Re-resolve against current posture / venue if single layer
+        let resolved: [BreakModel]
+        if models.count == 1, let layer = models.first?.layer {
+            resolved = [
+                BreakModel.builtin(
+                    layer: layer,
+                    position: scheduler.deskPosition,
+                    testMode: models[0].testMode,
+                    venue: venue
+                )
+            ]
+        } else {
+            resolved = models
+        }
 
-        presenter.present(models: models) { [weak self] action in
+        presenter.present(models: resolved) { [weak self] action in
             guard let self else { return }
             self.lastStdoutAction = action
             fputs(action.stdoutToken + "\n", stdout)
@@ -98,13 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             switch action {
             case .done:
-                self.scheduler.markCompleted(layer: primaryLayer)
+                self.scheduler.markCompleted(layer: primaryLayer, action: .done)
             case .snooze(let minutes):
                 self.scheduler.snooze(minutes: minutes)
-                SystemControl.run("snooze", "\(minutes)")
             case .skip:
-                // Still advance so we don't re-fire immediately
-                self.scheduler.markCompleted(layer: primaryLayer)
+                self.scheduler.markCompleted(layer: primaryLayer, action: .skip)
             }
 
             self.menuBar.refresh()

@@ -150,11 +150,32 @@ Exact timers may drift; when in doubt, prefer **doing the next short reset** ove
 
 ## For implementers
 
-- **Layer A** = 20-minute cadence, 30–45 s prompts.  
-- **Layer B** = 40-minute cadence, 90–120 s; prefer standing.  
-- **Layer C** = 90-minute cadence, 3–5 min; user chooses band circuit or walk.  
+- **Layer A** = ~25 min *active desk time*, soft eyes prompt.  
+- **Layer B** = ~40 min *active desk time*, firm change + move.  
+- **Layer C** = ~90 min *active desk time*, firm walk / bands.  
+- **Layer S** (standing desk) = ~30 min in posture, switch sit↔stand; min dwell ~15 min.  
 - **Layer D** = optional bookends / lunch, not required for core timers.  
 - When B or C fires, it may absorb a concurrent A window rather than stacking back-to-back micro-prompts.  
 - Never auto-prescribe aggressive stretches, neck manipulation, or “hold perfect posture” messaging.
+
+### Activity awareness (no banked “debt”)
+
+Wall-clock + sticky debt are wrong: **leaving the keyboard is often already the break.**  
+Do not cash old timers when someone returns from a walk or sits through a video.
+
+| Rule | Default | Why |
+|------|---------|-----|
+| **Active-seconds clocks** | Accrue only while input in last ~90 s | Pure AFK doesn't burn timers |
+| **No prompts while passive** | Idle ≥ ~45 s → suppress all overlays | Video / reading / staring — don't hijack |
+| **Natural pause for firm** | Only idle **2.5 s–45 s** while still in an active bout | Mid-keystroke defer; deep idle ≠ fire window |
+| **Movement credit** | Idle ≥ ~4 min → forgive Eyes + Change + Switch | Short walk / stand-up *is* the Change |
+| **Walk credit** | Idle ≥ ~8 min → forgive all layers | Real walk *is* the Walk |
+| **Firm grace** after launch / wake / workday open / return from credited away | ~8 min | Settle in; debt already forgiven |
+| **Posture settle** after sit/stand change | ~12 min active | Don't demand switch the second you sit |
+| **Min dwell** (standing desk) | ~15 min | Avoid thrashing posture |
+| **Work window edge** | Reset clocks + grace at day open | No 07:00 ambush |
+
+Priority when due: **C > S > B > A**. Soft A never full-screens; firm layers take over the display.  
+**Debt is continuous sedentary desk-work**, not a balance sheet across breaks.
 
 This protocol prioritizes **sustainable micro-movement** for people who will actually do it between meetings and deep work—not a gym session at the desk.

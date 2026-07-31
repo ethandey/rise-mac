@@ -1,0 +1,40 @@
+name: Package Rise.app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show icon assets (must exist in git)
+        run: |
+          test -f assets/AppIcon/AppIcon.icns
+          test -f assets/AppIcon/AppIcon-1024.png
+          test -f docs/app-icon.png
+          test -f docs/how-it-works.jpg
+          ls -lh assets/AppIcon/ docs/app-icon.png docs/how-it-works.jpg
+
+      - name: Build Rise.app
+        run: bash scripts/package-app.sh
+
+      - name: Verify icon embedded in app
+        run: |
+          test -f dist/Rise.app/Contents/Resources/AppIcon.icns
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' dist/Rise.app/Contents/Info.plist | grep -q AppIcon
+          file dist/Rise.app/Contents/Resources/AppIcon.icns
+
+      - name: Upload app + zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rise-macOS
+          path: |
+            dist/Rise.app
+            dist/Rise-*.zip
+          if-no-files-found: error

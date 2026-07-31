@@ -1,36 +1,30 @@
 # Rise
 
-**Micro-breaks for people who forget they have a body.**
+<p align="center">
+  <img src="docs/app-icon.png" width="128" height="128" alt="Rise app icon — sunrise over soft hills" />
+</p>
 
-Native macOS OLED full-screen break coach for desk workers. Eyes every 20 minutes. Stretch every 40. Bands or a walk every 90. Soft warning → dim takeover → checklist → Done reward.
+<p align="center">
+  <strong>Micro-breaks for people who forget they have a body.</strong>
+</p>
 
-```
-  menu bar
-       │
-       ▼
-  ┌──────────────────────────────┐
-  │  Eyes + Posture starting  8  │   soft warning pill
-  │  Every 20 minutes            │
-  │        [ Delay 5 min ]       │
-  └──────────────────────────────┘
-       │
-       ▼  screen dims (OLED black)
-  ┌──────────────────────────────┐
-  │  Eyes + Posture Reset        │
-  │  About 40 seconds            │
-  │                              │
-  │  1  Gaze                 20s │
-  │     Look ~20 ft away…        │
-  │  2  Blink                ×10 │
-  │  …                           │
-  │         [ Done ]             │
-  └──────────────────────────────┘
-       │
-       ▼
-     ✓  Nice work · Break complete
-```
+Native macOS menu-bar coach for desk work. Active-time clocks. Home & office full desk routine. Soft café popups when you’re out. No nag mid-video.
 
-> Drop a Product Hunt–ready `docs/demo.gif` when you have one. The flow above *is* the product.
+---
+
+## How it works (one picture)
+
+<p align="center">
+  <img src="docs/how-it-works.jpg" width="100%" alt="Rise flow diagram: where you are, how clocks run, and break layers" />
+</p>
+
+| Track | What happens |
+|--------|----------------|
+| **Where** | **Home** and **Office** use the same full desk routine (firm full-screen when due). **Away** (café etc.) → soft floating popup only, seated-friendly moves. |
+| **Clocks** | Time accrues only while you’re **actively** using the Mac. Idle pauses clocks. Walking away **credits** the break (debt is forgiven, not banked). |
+| **Breaks** | **Eyes** ~25 min (soft pill) · **Change** ~40 min · **Walk** ~90 min. Soft never dims the whole screen; firm does at home/office. |
+
+Full protocol: [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
 ---
 
@@ -38,41 +32,40 @@ Native macOS OLED full-screen break coach for desk workers. Eyes every 20 minute
 
 Your chair is fine. Your monitor height is fine. The problem is **you haven't moved in 47 minutes** and your neck is filing a formal complaint.
 
-- Static posture loads the same tissues until they complain
-- Banner notifications get dismissed mid-sentence
-- Timers in other apps are easy to ignore forever
+- Static posture loads the same tissues until they complain  
+- Banner notifications get dismissed mid-sentence  
+- Wall-clock timers nag you the second you sit down after a real walk  
 
-Rise doesn't ask. It takes the screen over gently, walks you through a short checklist, and gets out of the way. You stay human between Slack threads.
+Rise counts **desk work**, not calendar time. Leaving the keyboard is often already the break.
 
 ---
 
 ## Features
 
-- **Three physio-informed layers** — eyes, stretch, bands/walk
-- **Soft warning pill** with delay options (no ambush)
-- **OLED full-screen coach** — pure black, scannable steps, Done reward
-- **Menu bar** — start Eyes / Stretch / Bands anytime
-- **Quiet lunch + work hours** — optional scheduler silence windows
-- **Login item** — opens at login via LaunchAgent
-- **Native Swift** — AppKit + SwiftUI, not a Tk window from 2009
+- **Activity-aware clocks** — pause for video / AFK; credit walks  
+- **Home + Office places** — same routine; standing desk toggle per place  
+- **Café mode** when away — extended soft popup, no full-screen hijack  
+- **Soft eyes pill** vs **firm OLED coach** at the desk  
+- **Menu bar** — next up, live countdown, modes, places  
+- **Login item** — starts with your session  
+- **Native Swift** — AppKit + SwiftUI  
 
 ---
 
-## The three layers
+## The layers
 
-| | Every | Time | What |
+| | Every (active) | Time | What |
 |---|-------|------|------|
-| **A** | 20 min | ~30–45 s | 20-20-20 eyes + posture reset |
-| **B** | 40 min | ~90–120 s | Stand: neck → chest → mid-back → hip flexors → wrists |
-| **C** | 90 min | 3–5 min | Resistance band mini-circuit *or* a real walk |
-
-Full protocol: [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+| **A · Eyes** | ~25 min | ~30 s | Far gaze + blinks + posture (soft) |
+| **B · Change** | ~40 min | ~90 s | Move / switch load (firm at desk) |
+| **C · Walk** | ~90 min | 3–5 min | Real walk or café-friendly move |
+| **S · Switch** | ~30 min | ~30 s | Sit ↔ stand (only if standing desk on) |
 
 ---
 
 ## Install (macOS)
 
-### Easy (app)
+### App (recommended)
 
 ```bash
 git clone https://github.com/ethandey/rise-mac.git
@@ -80,46 +73,55 @@ cd rise-mac
 bash scripts/install.sh
 ```
 
-That builds **Rise.app**, installs it to **`/Applications/Rise.app`**, starts the menu bar agent at login, and uses:
+Installs **`/Applications/Rise.app`** (sunrise icon), LaunchAgent at login, data in:
 
-`~/Library/Application Support/Rise` for config and logs.
+`~/Library/Application Support/Rise`
 
-Or build only and drag the app yourself:
+### Package only (drag to Applications)
 
 ```bash
 bash scripts/package-app.sh
 open dist/          # Rise.app + Rise-1.1.0.zip
-# Drag Rise.app → Applications, then open it once
 ```
 
 **Requirements:** macOS 13+, Xcode Command Line Tools (`xcode-select --install`) to rebuild.
 
-### What you get
+CI packages the same app on every push to `main` (see [`.github/workflows/package.yml`](.github/workflows/package.yml)) and **requires the icon assets in git**.
 
-- Native **Rise.app** with a Tahoe-style sunrise icon  
-- Menu bar coach (no Dock icon — accessory app)  
-- Home + office places, café soft mode when away  
-- Active-time clocks (no nag mid-video / mid-walk)
+---
+
+## Assets in git
+
+| Path | Role |
+|------|------|
+| [`assets/AppIcon/AppIcon.icns`](assets/AppIcon/AppIcon.icns) | Bundled into `Rise.app` |
+| [`assets/AppIcon/AppIcon-1024.png`](assets/AppIcon/AppIcon-1024.png) | Master artwork |
+| [`docs/app-icon.png`](docs/app-icon.png) | README / GitHub |
+| [`docs/how-it-works.jpg`](docs/how-it-works.jpg) | Flow explainer (this page) |
+
+`scripts/package-app.sh` copies the `.icns` into the app — no icon, no ship.
 
 ---
 
 ## Usage
 
-Menu bar icon near the clock:
+Menu bar (menu-bar-only app — no Dock icon):
 
 | Action | What it does |
 |--------|----------------|
-| Modes → Eyes / Change / Walk | Start a break now |
-| Set Home Here / Set Office Here | Pin current location |
-| Standing desk (per place) | Sit/stand switch layer |
+| **Next** line | Live countdown for the next break |
+| **Modes** | Start Eyes / Change / Walk now |
+| **Set Home Here** | Pin home to current location |
+| **Set Office Here** | Pin office (same routine as home) |
+| **Standing desk** | Per place; enables sit/stand switch |
 
 CLI:
 
 ```bash
-bin/rise --menubar          # menu bar only
-bin/rise --layer A          # single break
-bin/rise --layer B
-bin/rise --layer C
+bin/rise --menubar
+bin/rise --layer A   # Eyes
+bin/rise --layer B   # Change
+bin/rise --layer C   # Walk
 ```
 
 ---
@@ -130,21 +132,21 @@ bin/rise --layer C
 bash scripts/uninstall.sh
 ```
 
-Removes the login item and `/Applications/Rise.app`. Leaves Application Support prefs so a reinstall keeps settings.
+Removes login item and `/Applications/Rise.app`. Leaves Application Support prefs.
 
 ---
 
 ## Built with
 
-- **Swift** — full-screen overlay + menu bar (`native/`)
-- **Python** — optional schedule daemon (`bin/desk_health.py`)
-- **launchd** — login start, crash recovery
+- **Swift** — overlay + menu bar (`native/`)  
+- **launchd** — login start  
+- **Imagine** — app icon + how-it-works graphic  
 
 ---
 
 ## Contributing
 
-PRs welcome — especially movement cues, accessibility, and “this broke on my Mac” reports.
+PRs welcome — movement cues, accessibility, and “this broke on my Mac” reports.
 
 ---
 

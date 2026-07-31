@@ -1,121 +1,81 @@
 # Rise
 
-<p align="center">
-  <img src="docs/app-icon.png" width="128" height="128" alt="Rise app icon — sunrise over soft hills" />
-</p>
+Micro-breaks for people who forget they have a body.
 
-<p align="center">
-  <strong>Micro-breaks for people who forget they have a body.</strong>
-</p>
-
-Native macOS menu-bar coach for desk work. Active-time clocks. Home & office full desk routine. Soft café popups when you’re out. No nag mid-video.
+Native macOS menu-bar coach for desk work. It counts time only while you’re actually at the keyboard, matches home and office, and stays soft when you’re out at a café.
 
 ---
 
-## How it works (one picture)
+## How it works
 
-<p align="center">
-  <img src="docs/how-it-works.jpg" width="100%" alt="Rise flow diagram: where you are, how clocks run, and break layers" />
-</p>
+| | |
+|---|---|
+| **Where you are** | **Home** and **Office** share the same full desk routine. **Away** (café, etc.) uses soft popups only — no full-screen takeover. |
+| **How clocks run** | Minutes accrue while you use the Mac. Idle pauses them. Walking away counts as the break; debt is not banked for when you return. |
+| **What you get** | Short, scheduled resets: eyes, posture change, and a real walk when you’ve been at the desk long enough. |
 
-| Track | What happens |
-|--------|----------------|
-| **Where** | **Home** and **Office** use the same full desk routine (firm full-screen when due). **Away** (café etc.) → soft floating popup only, seated-friendly moves. |
-| **Clocks** | Time accrues only while you’re **actively** using the Mac. Idle pauses clocks. Walking away **credits** the break (debt is forgiven, not banked). |
-| **Breaks** | **Eyes** ~25 min (soft pill) · **Change** ~40 min · **Walk** ~90 min. Soft never dims the whole screen; firm does at home/office. |
-
-Full protocol: [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+Full detail: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ---
 
-## Why
+## Layers
 
-Your chair is fine. Your monitor height is fine. The problem is **you haven't moved in 47 minutes** and your neck is filing a formal complaint.
+| Layer | Active time | Duration | Style | What it is |
+|-------|-------------|----------|--------|------------|
+| **Eyes** | ~25 min | ~30 s | Soft pill | Far gaze, blinks, quick posture |
+| **Change** | ~40 min | ~90 s | Firm at desk | Unload sitting/standing, light mobility |
+| **Walk** | ~90 min | 3–5 min | Firm at desk | Leave the screen — walk or café-friendly move |
+| **Switch** | ~30 min | ~30 s | Firm at desk | Sit ↔ stand (only if standing desk is on) |
 
-- Static posture loads the same tissues until they complain  
-- Banner notifications get dismissed mid-sentence  
-- Wall-clock timers nag you the second you sit down after a real walk  
-
-Rise counts **desk work**, not calendar time. Leaving the keyboard is often already the break.
+| Place | Routine | Presentation |
+|-------|---------|--------------|
+| Home | Full desk layers | Firm full-screen when due |
+| Office | Same as home | Firm full-screen when due |
+| Away | Seated / café-friendly | Soft floating popup |
 
 ---
 
 ## Features
 
-- **Activity-aware clocks** — pause for video / AFK; credit walks  
-- **Home + Office places** — same routine; standing desk toggle per place  
-- **Café mode** when away — extended soft popup, no full-screen hijack  
-- **Soft eyes pill** vs **firm OLED coach** at the desk  
-- **Menu bar** — next up, live countdown, modes, places  
-- **Login item** — starts with your session  
-- **Native Swift** — AppKit + SwiftUI  
+| | |
+|---|---|
+| Activity-aware clocks | Pause for video or AFK; credit real walks |
+| Home & office | Same schedule; standing desk can differ per place |
+| Café mode | Soft checklist when you’re not at a desk place |
+| Menu bar | Next break, modes, places — no Dock icon |
+| Login start | Opens with your session |
+| Native Swift | AppKit + SwiftUI |
 
 ---
 
-## The layers
+## Install
 
-| | Every (active) | Time | What |
-|---|-------|------|------|
-| **A · Eyes** | ~25 min | ~30 s | Far gaze + blinks + posture (soft) |
-| **B · Change** | ~40 min | ~90 s | Move / switch load (firm at desk) |
-| **C · Walk** | ~90 min | 3–5 min | Real walk or café-friendly move |
-| **S · Switch** | ~30 min | ~30 s | Sit ↔ stand (only if standing desk on) |
+**Requirements:** macOS 13+, Xcode Command Line Tools (`xcode-select --install`) if you rebuild.
 
----
+| Method | Commands |
+|--------|----------|
+| Install to Applications | `git clone https://github.com/ethandey/rise-mac.git && cd rise-mac && bash scripts/install.sh` |
+| Package only | `bash scripts/package-app.sh` then open `dist/` and drag `Rise.app` to Applications |
 
-## Install (macOS)
+After install:
 
-### App (recommended)
-
-```bash
-git clone https://github.com/ethandey/rise-mac.git
-cd rise-mac
-bash scripts/install.sh
-```
-
-Installs **`/Applications/Rise.app`** (sunrise icon), LaunchAgent at login, data in:
-
-`~/Library/Application Support/Rise`
-
-### Package only (drag to Applications)
-
-```bash
-bash scripts/package-app.sh
-open dist/          # Rise.app + Rise-1.1.0.zip
-```
-
-**Requirements:** macOS 13+, Xcode Command Line Tools (`xcode-select --install`) to rebuild.
-
-CI packages the same app on every push to `main` (see [`.github/workflows/package.yml`](.github/workflows/package.yml)) and **requires the icon assets in git**.
-
----
-
-## Assets in git
-
-| Path | Role |
-|------|------|
-| [`assets/AppIcon/AppIcon.icns`](assets/AppIcon/AppIcon.icns) | Bundled into `Rise.app` |
-| [`assets/AppIcon/AppIcon-1024.png`](assets/AppIcon/AppIcon-1024.png) | Master artwork |
-| [`docs/app-icon.png`](docs/app-icon.png) | README / GitHub |
-| [`docs/how-it-works.jpg`](docs/how-it-works.jpg) | Flow explainer (this page) |
-
-`scripts/package-app.sh` copies the `.icns` into the app — no icon, no ship.
+| | |
+|---|---|
+| App | `/Applications/Rise.app` |
+| Data | `~/Library/Application Support/Rise` |
+| Uninstall | `bash scripts/uninstall.sh` |
 
 ---
 
 ## Usage
 
-Menu bar (menu-bar-only app — no Dock icon):
-
-| Action | What it does |
-|--------|----------------|
-| **Next** line | Live countdown for the next break |
-| **Modes** | Start Eyes / Change / Walk now |
-| **Set Home Here** | Pin home to current location |
+| Menu | What it does |
+|------|----------------|
+| **Next** | Countdown to the next break (active time) |
+| **Modes** | Start Eyes, Change, or Walk now |
+| **Set Home Here** | Pin home to your current location |
 | **Set Office Here** | Pin office (same routine as home) |
 | **Standing desk** | Per place; enables sit/stand switch |
-
-CLI:
 
 ```bash
 bin/rise --menubar
@@ -126,34 +86,18 @@ bin/rise --layer C   # Walk
 
 ---
 
-## Uninstall
+## Project layout
 
-```bash
-bash scripts/uninstall.sh
-```
-
-Removes login item and `/Applications/Rise.app`. Leaves Application Support prefs.
-
----
-
-## Built with
-
-- **Swift** — overlay + menu bar (`native/`)  
-- **launchd** — login start  
-- **Imagine** — app icon + how-it-works graphic  
-
----
-
-## Contributing
-
-PRs welcome — movement cues, accessibility, and “this broke on my Mac” reports.
+| Path | Role |
+|------|------|
+| `native/` | Swift app source |
+| `assets/AppIcon/` | App icon (`.icns` + master PNG) |
+| `docs/PROTOCOL.md` | Movement protocol |
+| `scripts/install.sh` | Build, install, login item |
+| `scripts/package-app.sh` | Build `Rise.app` + zip in `dist/` |
 
 ---
 
 ## License
 
 [MIT](LICENSE) © 2026 Ethan Dey
-
----
-
-*Your spine has been in a stand-up all day. Rise is the adjournment.*

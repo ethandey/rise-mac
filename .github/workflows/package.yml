@@ -17,9 +17,7 @@ jobs:
         run: |
           test -f assets/AppIcon/AppIcon.icns
           test -f assets/AppIcon/AppIcon-1024.png
-          test -f docs/app-icon.png
-          test -f docs/how-it-works.jpg
-          ls -lh assets/AppIcon/ docs/app-icon.png docs/how-it-works.jpg
+          ls -lh assets/AppIcon/
 
       - name: Build Rise.app
         run: bash scripts/package-app.sh

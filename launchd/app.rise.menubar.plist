@@ -6,7 +6,7 @@
 	<string>app.rise.menubar</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/ethan/desk-health/bin/DeskHealthOverlay</string>
+		<string>/Applications/Rise.app/Contents/MacOS/Rise</string>
 		<string>--menubar</string>
 	</array>
 	<key>RunAtLoad</key>
@@ -18,10 +18,10 @@
 	<key>LimitLoadToSessionType</key>
 	<string>Aqua</string>
 	<key>WorkingDirectory</key>
-	<string>/Users/ethan/desk-health</string>
+	<string>/Users/ethan/Library/Application Support/Rise</string>
 	<key>StandardOutPath</key>
-	<string>/Users/ethan/desk-health/data/rise-menubar.out.log</string>
+	<string>/Users/ethan/Library/Application Support/Rise/data/rise-menubar.out.log</string>
 	<key>StandardErrorPath</key>
-	<string>/Users/ethan/desk-health/data/rise-menubar.err.log</string>
+	<string>/Users/ethan/Library/Application Support/Rise/data/rise-menubar.err.log</string>
 </dict>
 </plist>
